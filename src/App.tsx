@@ -22,6 +22,12 @@ import { chipBeep, cueBallHit, loseSound, setMuted, spinStartBeep, winSound } fr
 const TOKEN_VALUES = [10, 25, 50, 100];
 /** Pause between auto-fired free spins, so each result is readable (ms). */
 const AUTO_SPIN_DELAY = 1200;
+/** How long the winning board is held while the payout counts into Credits (ms). */
+const CASH_OUT_DURATION = 1700;
+/** Duration of the Credit Out → Credits transfer roll (ms). */
+const TRANSFER_DURATION = 1100;
+/** Normal Credits readout count-up duration (ms). */
+const READOUT_DURATION = 650;
 
 interface CelebrationState {
   type: "win" | "jackpot" | "ninebonus";
@@ -43,34 +49,20 @@ function toBets(rec: Record<string, number>): Bets {
   return b;
 }
 
-/** Animate a number rolling from its previous value to the target. */
-function useCountUp(target: number, duration = 650): number {
-  const [display, setDisplay] = useState(target);
-  const fromRef = useRef(target);
-  const rafRef = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    const from = fromRef.current;
-    if (from === target) return;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setDisplay(Math.round(from + (target - from) * eased));
-      if (p < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = target;
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      fromRef.current = target;
-    };
-  }, [target, duration]);
-
-  return display;
+/** Tween a number from→to over a duration, calling onUpdate each frame. Returns a cancel fn. */
+function tween(from: number, to: number, duration: number, onUpdate: (v: number) => void): () => void {
+  if (from === to) {
+    onUpdate(to);
+    return () => {};
+  }
+  const start = performance.now();
+  let raf = requestAnimationFrame(function step(now: number) {
+    const p = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    onUpdate(Math.round(from + (to - from) * eased));
+    if (p < 1) raf = requestAnimationFrame(step);
+  });
+  return () => cancelAnimationFrame(raf);
 }
 
 export default function App() {
@@ -90,18 +82,31 @@ export default function App() {
   const [landed, setLanded] = useState<BallNumber | null>(null);
   const [spinId, setSpinId] = useState(0);
   const [spinning, setSpinning] = useState(false);
-  const [lastWin, setLastWin] = useState(0);
   const [pending, setPending] = useState<SpinResponse | null>(null);
   const [muted, setMutedState] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationState | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [message, setMessage] = useState("Drop tokens on the balls and press START");
+  // Pending board refresh + transfer params held during the cash-out animation.
+  const [cashOut, setCashOut] = useState<{
+    odds: Odds;
+    bets: Bets;
+    win: number;
+    base: number;
+  } | null>(null);
 
-  const creditOut = useCountUp(lastWin);
+  // Animated LED readouts. Credits tracks the balance; Credit Out shows the
+  // current payout, which drains into Credits during a cash-out.
+  const [creditsDisplay, setCreditsDisplay] = useState(0);
+  const [creditOutDisplay, setCreditOutDisplay] = useState(0);
+  const creditsDispRef = useRef(0);
+  creditsDispRef.current = creditsDisplay;
 
   const staked = totalBet(bets);
   const isFreeSpin = freeSpins > 0;
-  const canSpin = !spinning && stateLoaded && (isFreeSpin || (staked > 0 && staked <= credits));
+  const cashingOut = cashOut !== null;
+  const canSpin =
+    !spinning && stateLoaded && !cashingOut && (isFreeSpin || (staked > 0 && staked <= credits));
 
   // --- Auth wiring ---
   useEffect(() => {
@@ -152,7 +157,7 @@ export default function App() {
 
   const placeToken = useCallback(
     (n: BallNumber) => {
-      if (spinning || isFreeSpin) return;
+      if (spinning || isFreeSpin || cashingOut) return;
       if (staked + token > credits) {
         setMessage("Not enough credits for that token.");
         return;
@@ -160,12 +165,12 @@ export default function App() {
       chipBeep();
       setBets((b) => ({ ...b, [n]: (b[n] ?? 0) + token }));
     },
-    [spinning, isFreeSpin, staked, token, credits],
+    [spinning, isFreeSpin, cashingOut, staked, token, credits],
   );
 
   const removeToken = useCallback(
     (n: BallNumber) => {
-      if (spinning || isFreeSpin) return;
+      if (spinning || isFreeSpin || cashingOut) return;
       setBets((b) => {
         const current = b[n] ?? 0;
         if (current <= 0) return b;
@@ -177,13 +182,13 @@ export default function App() {
         return next;
       });
     },
-    [spinning, isFreeSpin, token],
+    [spinning, isFreeSpin, cashingOut, token],
   );
 
   const clearBets = useCallback(() => {
-    if (spinning || isFreeSpin) return;
+    if (spinning || isFreeSpin || cashingOut) return;
     setBets({});
-  }, [spinning, isFreeSpin]);
+  }, [spinning, isFreeSpin, cashingOut]);
 
   const handleSpin = useCallback(async () => {
     if (spinning || !stateLoaded) return;
@@ -191,6 +196,7 @@ export default function App() {
     if (!free && (staked <= 0 || staked > credits)) return;
 
     setSpinning(true);
+    setCreditOutDisplay(0); // clear the previous payout when a new roll begins
     // Bring the playfield into view so the chase isn't off-screen on mobile.
     window.scrollTo({ top: 0, behavior: "smooth" });
     spinStartBeep();
@@ -217,12 +223,10 @@ export default function App() {
     const res = pending;
     if (!res) return;
 
-    // Apply authoritative state returned by the server.
+    // Game state applies immediately (authoritative).
+    const won = res.won + res.instantCredit;
     setCredits(res.credits);
     setFreeSpins(res.freeSpins);
-    setOdds(toOdds(res.nextOdds));
-    setBets(toBets(res.nextBets));
-    setLastWin(res.won + res.instantCredit);
 
     if (res.bonusHit) {
       cueBallHit();
@@ -239,6 +243,20 @@ export default function App() {
     } else {
       loseSound();
       setMessage(`Ball ${res.landed} ×${res.odds} — no token there.`);
+    }
+
+    // On a round-ending win, hold the winning board while the payout transfers
+    // from Credit Out into Credits, then refresh (clear bets / re-roll odds).
+    // Otherwise (a loss, or a mid free-spin win) just show the payout and the
+    // Credits readout counts up on its own.
+    const nextOdds = toOdds(res.nextOdds);
+    const nextBets = toBets(res.nextBets);
+    if (won > 0 && res.freeSpins === 0) {
+      setCashOut({ odds: nextOdds, bets: nextBets, win: won, base: res.credits - won });
+    } else {
+      setCreditOutDisplay(won);
+      setOdds(nextOdds);
+      setBets(nextBets);
     }
     setPending(null);
   }, [pending]);
@@ -264,6 +282,40 @@ export default function App() {
     return () => clearTimeout(t);
   }, [freeSpins, spinning, handleSpin]);
 
+  // Credits readout counts toward the authoritative balance — except while a
+  // cash-out transfer is running, which drives both readouts directly.
+  useEffect(() => {
+    if (cashingOut) return;
+    return tween(creditsDispRef.current, credits, READOUT_DURATION, setCreditsDisplay);
+  }, [credits, cashingOut]);
+
+  // Cash-out: the payout drains from Credit Out into Credits in lockstep, the
+  // winning board is held, then it refreshes (clear bets / re-roll odds).
+  useEffect(() => {
+    if (!cashOut) return;
+    const { win, base, odds: nextOdds, bets: nextBets } = cashOut;
+    setCreditsDisplay(base);
+    setCreditOutDisplay(win);
+    const start = performance.now();
+    let raf = requestAnimationFrame(function step(now: number) {
+      const p = Math.min(1, (now - start) / TRANSFER_DURATION);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const moved = Math.round(win * eased);
+      setCreditsDisplay(base + moved);
+      setCreditOutDisplay(win - moved);
+      if (p < 1) raf = requestAnimationFrame(step);
+    });
+    const t = setTimeout(() => {
+      setOdds(nextOdds);
+      setBets(nextBets);
+      setCashOut(null);
+    }, CASH_OUT_DURATION);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [cashOut]);
+
   // Auto-dismiss the celebration overlay after it has played.
   useEffect(() => {
     if (!celebration) return;
@@ -277,7 +329,7 @@ export default function App() {
   if (!stateLoaded || !odds) return <Splash text="Loading your table…" />;
 
   return (
-    <div className="mx-auto flex min-h-full max-w-2xl flex-col gap-4 px-3 py-6">
+    <div className="mx-auto min-h-full w-full max-w-2xl px-3 py-6 lg:max-w-5xl">
       {celebration && (
         <Celebration
           key={spinId}
@@ -289,8 +341,10 @@ export default function App() {
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
-      {/* Cabinet */}
-      <div className="cabinet-stripes relative overflow-hidden rounded-3xl border-4 border-amber-700/60 p-4 shadow-2xl sm:p-6">
+      {/* Side-by-side on large screens: the table (left) and the bets (right). */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+        {/* Cabinet */}
+        <div className="cabinet-stripes relative overflow-hidden rounded-3xl border-4 border-amber-700/60 p-4 shadow-2xl sm:p-6 lg:flex-1 lg:min-w-0">
         {/* Marquee — on phones: title left, buttons right (no overlap). On
             larger screens: title centered with the buttons floated right. */}
         <header className="relative mb-4 flex min-h-11 items-center justify-between gap-2 sm:justify-center sm:gap-3">
@@ -335,10 +389,10 @@ export default function App() {
 
         {/* Control deck — LED readouts */}
         <div className="mt-4 grid grid-cols-2 items-center justify-items-center gap-3 rounded-2xl border-4 border-black/40 bg-gradient-to-b from-zinc-700 to-zinc-900 px-3 py-3 shadow-inner sm:flex sm:justify-around sm:gap-0">
-          <LedDisplay label="Credits" value={credits} color="#34d399" size={24} digits={4} />
+          <LedDisplay label="Credits" value={creditsDisplay} color="#34d399" size={24} digits={4} />
           <LedDisplay label="Bet" value={staked} color="#ffd11a" size={24} digits={4} />
           <LedDisplay label="Free" value={freeSpins} color="#ff7ad1" size={24} digits={2} />
-          <LedDisplay label="Credit Out" value={creditOut} color="#ff2d2d" size={24} digits={4} />
+          <LedDisplay label="Credit Out" value={creditOutDisplay} color="#ff2d2d" size={24} digits={4} />
         </div>
 
         {/* Status line */}
@@ -347,13 +401,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* Bet panel */}
-      <div className="rounded-3xl border-4 border-amber-700/60 bg-gradient-to-b from-amber-500 to-amber-600 p-4 shadow-xl">
+        {/* Bet panel */}
+        <div className="flex flex-col justify-center rounded-3xl border-4 border-amber-700/60 bg-gradient-to-b from-amber-500 to-amber-600 p-4 shadow-xl lg:flex-1 lg:min-w-0 lg:p-6">
         <BetBoard
           bets={bets}
           odds={odds}
           landed={spinning ? null : landed}
-          disabled={spinning || isFreeSpin}
+          disabled={spinning || isFreeSpin || cashingOut}
           onPlace={placeToken}
           onRemove={removeToken}
         />
@@ -424,6 +478,7 @@ export default function App() {
           multipliers lock through the run, and re-hitting the 9 pays an instant {NINE_BALL_BONUS_MULT}×
           bonus.
         </p>
+      </div>
       </div>
     </div>
   );
