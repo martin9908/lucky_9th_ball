@@ -101,6 +101,8 @@ export default function App() {
   const [creditOutDisplay, setCreditOutDisplay] = useState(0);
   const creditsDispRef = useRef(0);
   creditsDispRef.current = creditsDisplay;
+  // The scrollable layout container; scrolled to the top when a spin starts.
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const staked = totalBet(bets);
   const isFreeSpin = freeSpins > 0;
@@ -198,7 +200,8 @@ export default function App() {
     setSpinning(true);
     setCreditOutDisplay(0); // clear the previous payout when a new roll begins
     // Bring the playfield into view so the chase isn't off-screen on mobile.
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" }); // fallback if the window is the scroller
     spinStartBeep();
     setMessage(free ? `🎁 Free spin! (${freeSpins} left)` : "Selecting…");
     if (!free) setCredits((c) => c - staked); // optimistic; reconciled on settle
@@ -329,7 +332,10 @@ export default function App() {
   if (!stateLoaded || !odds) return <Splash text="Loading your table…" />;
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-2xl px-3 py-6 lg:max-w-5xl">
+    <div
+      ref={scrollRef}
+      className="mx-auto h-dvh w-full max-w-2xl overflow-y-auto px-3 py-6 lg:max-w-5xl"
+    >
       {celebration && (
         <Celebration
           key={spinId}
