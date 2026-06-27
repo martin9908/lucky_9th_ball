@@ -7,7 +7,7 @@ import PoolBall from "./components/PoolBall";
 import Celebration from "./components/Celebration";
 import HelpModal from "./components/HelpModal";
 import AuthScreen from "./components/AuthScreen";
-import { totalBet, FREE_SPIN_RANGE, NINE_BALL_BONUS_MULT } from "./game/engine";
+import { totalBet, FREE_SPIN_RANGE, RETRIGGER_FREE_SPINS } from "./game/engine";
 import { BALL_NUMBERS, type BallNumber, type Bets, type Odds } from "./game/types";
 import {
   supabase,
@@ -30,7 +30,7 @@ const TRANSFER_DURATION = 1100;
 const READOUT_DURATION = 650;
 
 interface CelebrationState {
-  type: "win" | "jackpot" | "ninebonus";
+  type: "win" | "jackpot" | "retrigger";
   amount?: number;
   freeSpins?: number;
 }
@@ -227,7 +227,7 @@ export default function App() {
     if (!res) return;
 
     // Game state applies immediately (authoritative).
-    const won = res.won + res.instantCredit;
+    const won = res.won;
     setCredits(res.credits);
     setFreeSpins(res.freeSpins);
 
@@ -235,10 +235,10 @@ export default function App() {
       cueBallHit();
       setCelebration({ type: "jackpot", freeSpins: res.freeSpinsAwarded });
       setMessage(`🟡 THE 9 BALL! ${res.freeSpinsAwarded} free spins awarded!`);
-    } else if (res.instantCredit > 0) {
+    } else if (res.retrigger) {
       cueBallHit();
-      setCelebration({ type: "ninebonus", amount: res.instantCredit });
-      setMessage(`🟡 9 BALL BONUS! +${res.instantCredit} credits!`);
+      setCelebration({ type: "retrigger", freeSpins: res.freeSpinsAwarded });
+      setMessage(`🟡 9 BALL! +${res.freeSpinsAwarded} free spins!`);
     } else if (res.won > 0) {
       winSound();
       setCelebration({ type: "win", amount: res.won });
@@ -481,8 +481,7 @@ export default function App() {
           Left-click a ball to drop a token, right-click to remove. The selector lands on one ball;
           if you've bet it, you win your stake × its odds (multipliers re-roll every spin). Land on
           the <b>9 ball</b> for {FREE_SPIN_RANGE.min}–{FREE_SPIN_RANGE.max} free spins — bets and
-          multipliers lock through the run, and re-hitting the 9 pays an instant {NINE_BALL_BONUS_MULT}×
-          bonus.
+          multipliers lock through the run, and re-hitting the 9 adds {RETRIGGER_FREE_SPINS} more.
         </p>
       </div>
       </div>

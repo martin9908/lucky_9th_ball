@@ -12,11 +12,11 @@ import {
 
 const TOTAL_WEIGHT = BALL_NUMBERS.reduce((sum, n) => sum + BALLS[n].weight, 0);
 
-/** Landing on the 9 ball awards a random number of free spins in this range. */
-export const FREE_SPIN_RANGE = { min: 3, max: 10 } as const;
+/** Free spins awarded by the first 9-ball hit (on a paid spin). */
+export const FREE_SPIN_RANGE = { min: 10, max: 15 } as const;
 
-/** Re-hitting the 9 during a free-spin run pays this multiple of the total bet. */
-export const NINE_BALL_BONUS_MULT = 5;
+/** Free spins added when the 9 is re-hit during a free-spin run (retrigger). */
+export const RETRIGGER_FREE_SPINS = 3;
 
 function randomInt(minInclusive: number, maxInclusive: number): number {
   return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
@@ -63,9 +63,9 @@ export interface SpinOptions {
  * current bets and returns the outcome. Balance bookkeeping (charging the bet,
  * crediting the win) is the caller's job.
  *
- * On a paid spin, landing the 9 pays nothing but awards 3–10 free spins. During
- * a free-spin run, re-hitting the 9 instead pays an instant credit (a multiple
- * of the total bet) and the run continues.
+ * On a paid spin, landing the 9 pays nothing but awards 10–15 free spins. During
+ * a free-spin run, re-hitting the 9 retriggers +3 more free spins and the run
+ * continues.
  */
 export function spin(bets: Bets, odds: Odds, options: SpinOptions = {}): SpinResult {
   const isFreeSpin = options.isFreeSpin ?? false;
@@ -74,8 +74,12 @@ export function spin(bets: Bets, odds: Odds, options: SpinOptions = {}): SpinRes
   const stake = totalBet(bets);
 
   const bonusHit = isNine && !isFreeSpin;
-  const freeSpinsAwarded = bonusHit ? randomInt(FREE_SPIN_RANGE.min, FREE_SPIN_RANGE.max) : 0;
-  const instantCredit = isNine && isFreeSpin ? stake * NINE_BALL_BONUS_MULT : 0;
+  const retrigger = isNine && isFreeSpin;
+  const freeSpinsAwarded = bonusHit
+    ? randomInt(FREE_SPIN_RANGE.min, FREE_SPIN_RANGE.max)
+    : retrigger
+      ? RETRIGGER_FREE_SPINS
+      : 0;
 
   const landedOdds = odds[landed];
   const won = isNine ? 0 : (bets[landed] ?? 0) * landedOdds;
@@ -86,8 +90,8 @@ export function spin(bets: Bets, odds: Odds, options: SpinOptions = {}): SpinRes
     totalBet: stake,
     won,
     bonusHit,
+    retrigger,
     freeSpinsAwarded,
-    instantCredit,
     wasFreeSpin: isFreeSpin,
   };
 }

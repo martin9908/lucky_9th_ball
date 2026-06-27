@@ -16,8 +16,8 @@ export interface SpinResponse {
   odds: number;
   won: number;
   bonusHit: boolean;
+  retrigger: boolean;
   freeSpinsAwarded: number;
-  instantCredit: number;
   wasFreeSpin: boolean;
   totalBet: number;
   credits: number;

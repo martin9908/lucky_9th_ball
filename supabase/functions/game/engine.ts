@@ -16,8 +16,10 @@ const TOTAL_WEIGHT = BALL_NUMBERS.reduce((sum, n) => sum + WEIGHTS[n], 0);
 export const MULTIPLIER_RANGE = { min: 2, max: 14 };
 export const HIGH_MULTIPLIER_RANGE = { min: 20, max: 50 };
 export const HIGH_MULTIPLIER_CHANCE = 0.03;
-export const FREE_SPIN_RANGE = { min: 3, max: 10 };
-export const NINE_BALL_BONUS_MULT = 5;
+/** Free spins awarded by the first 9-ball hit (on a paid spin). */
+export const FREE_SPIN_RANGE = { min: 10, max: 15 };
+/** Free spins added when the 9 is re-hit during a free-spin run (retrigger). */
+export const RETRIGGER_FREE_SPINS = 3;
 
 function randomInt(minInclusive: number, maxInclusive: number): number {
   return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
@@ -72,9 +74,11 @@ export interface SpinOutcome {
   landed: BallNumber;
   odds: number;
   won: number;
+  /** The first 9-ball hit on a paid spin (starts the free-spin run). */
   bonusHit: boolean;
+  /** The 9 re-hit during a free-spin run (adds more free spins). */
+  retrigger: boolean;
   freeSpinsAwarded: number;
-  instantCredit: number;
   wasFreeSpin: boolean;
   totalBet: number;
   // Authoritative next state to persist and return to the client.
@@ -93,12 +97,16 @@ export function resolveSpin(state: PlayerState, requestedBets: Bets): SpinOutcom
 
   const landed = pickLandedNumber();
   const isNine = landed === 9;
-  const bonusHit = isNine && !isFreeSpin;
-  const freeSpinsAwarded = bonusHit ? randomInt(FREE_SPIN_RANGE.min, FREE_SPIN_RANGE.max) : 0;
-  const instantCredit = isNine && isFreeSpin ? stake * NINE_BALL_BONUS_MULT : 0;
+  const bonusHit = isNine && !isFreeSpin; // first hit starts the run (10–15)
+  const retrigger = isNine && isFreeSpin; // re-hit during the run (+3)
+  const freeSpinsAwarded = bonusHit
+    ? randomInt(FREE_SPIN_RANGE.min, FREE_SPIN_RANGE.max)
+    : retrigger
+      ? RETRIGGER_FREE_SPINS
+      : 0;
   const won = isNine ? 0 : (bets[landed] ?? 0) * odds[landed];
 
-  const credits = state.credits - (isFreeSpin ? 0 : stake) + won + instantCredit;
+  const credits = state.credits - (isFreeSpin ? 0 : stake) + won;
   const freeSpins = Math.max(0, state.freeSpins - (isFreeSpin ? 1 : 0)) + freeSpinsAwarded;
 
   // Odds and bets re-roll/clear once the round is fully over, but stay locked
@@ -116,8 +124,8 @@ export function resolveSpin(state: PlayerState, requestedBets: Bets): SpinOutcom
     odds: odds[landed],
     won,
     bonusHit,
+    retrigger,
     freeSpinsAwarded,
-    instantCredit,
     wasFreeSpin: isFreeSpin,
     totalBet: stake,
     next,

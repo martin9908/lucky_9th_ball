@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { spin, totalBet, generateOdds, FREE_SPIN_RANGE, NINE_BALL_BONUS_MULT } from "./engine";
-import { BALL_NUMBERS, MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE, type Odds } from "./types";
+import { spin, totalBet, generateOdds, FREE_SPIN_RANGE, RETRIGGER_FREE_SPINS } from "./engine";
+import { BALL_NUMBERS, BALLS, MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE, type BallNumber, type Odds } from "./types";
 
 /** Build a full odds map (all balls = 2, the 9 = 0) with optional overrides. */
 function makeOdds(overrides: Partial<Odds> = {}): Odds {
@@ -8,10 +8,19 @@ function makeOdds(overrides: Partial<Odds> = {}): Odds {
   return { ...base, ...overrides };
 }
 
-// With equal weights (1–8 = 10, 9 = 9) the total weight is 89. pickLandedNumber
-// rolls Math.random()*89 and walks 1→9, so a given random value lands a known ball.
-const LAND_5 = 0.5; // 0.5*89 = 44.5 → ball 5
-const LAND_9 = 0.99; // 0.99*89 = 88.1 → ball 9
+// The Math.random value that makes pickLandedNumber land on `target`, derived
+// from the live weights so the tests don't break when a weight is tuned.
+const TOTAL_WEIGHT = BALL_NUMBERS.reduce((sum, n) => sum + BALLS[n].weight, 0);
+function landRandom(target: BallNumber): number {
+  let before = 0;
+  for (const n of BALL_NUMBERS) {
+    if (n === target) break;
+    before += BALLS[n].weight;
+  }
+  return (before + BALLS[target].weight / 2) / TOTAL_WEIGHT;
+}
+const LAND_5 = landRandom(5);
+const LAND_9 = landRandom(9);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -71,7 +80,7 @@ describe("spin — payouts", () => {
     expect(result.odds).toBe(7);
     expect(result.won).toBe(70);
     expect(result.bonusHit).toBe(false);
-    expect(result.instantCredit).toBe(0);
+    expect(result.retrigger).toBe(false);
     expect(result.totalBet).toBe(10);
   });
 
@@ -91,18 +100,19 @@ describe("spin — the 9 ball", () => {
     const result = spin({ 5: 10 }, makeOdds());
     expect(result.landed).toBe(9);
     expect(result.bonusHit).toBe(true);
+    expect(result.retrigger).toBe(false);
     expect(result.freeSpinsAwarded).toBe(FREE_SPIN_RANGE.min);
     expect(result.won).toBe(0);
-    expect(result.instantCredit).toBe(0);
   });
 
-  it("pays an instant credit when the 9 is re-hit during a free spin", () => {
+  it("retriggers +3 free spins when the 9 is re-hit during a free spin", () => {
     vi.spyOn(Math, "random").mockReturnValue(LAND_9);
     const result = spin({ 5: 10 }, makeOdds(), { isFreeSpin: true });
     expect(result.landed).toBe(9);
     expect(result.bonusHit).toBe(false);
-    expect(result.freeSpinsAwarded).toBe(0);
-    expect(result.instantCredit).toBe(10 * NINE_BALL_BONUS_MULT);
+    expect(result.retrigger).toBe(true);
+    expect(result.freeSpinsAwarded).toBe(RETRIGGER_FREE_SPINS);
+    expect(result.won).toBe(0);
     expect(result.wasFreeSpin).toBe(true);
   });
 });
@@ -113,7 +123,6 @@ describe("spin — invariants", () => {
       const result = spin({ 1: 1, 4: 2, 7: 3 }, generateOdds());
       expect(BALL_NUMBERS).toContain(result.landed);
       expect(result.won).toBeGreaterThanOrEqual(0);
-      expect(result.instantCredit).toBeGreaterThanOrEqual(0);
     }
   });
 });

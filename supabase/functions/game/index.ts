@@ -116,8 +116,8 @@ Deno.serve(async (req) => {
         odds: outcome.odds,
         won: outcome.won,
         bonusHit: outcome.bonusHit,
+        retrigger: outcome.retrigger,
         freeSpinsAwarded: outcome.freeSpinsAwarded,
-        instantCredit: outcome.instantCredit,
         wasFreeSpin: outcome.wasFreeSpin,
         totalBet: outcome.totalBet,
         // New authoritative state for the client to display after the chase.

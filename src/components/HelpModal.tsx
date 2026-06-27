@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { FREE_SPIN_RANGE, NINE_BALL_BONUS_MULT } from "../game/engine";
+import { FREE_SPIN_RANGE, RETRIGGER_FREE_SPINS } from "../game/engine";
 import { MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE } from "../game/types";
 import PoolBall from "./PoolBall";
 
@@ -36,8 +36,8 @@ const RULES: Rule[] = [
   },
   {
     icon: "💰",
-    title: "9 ball bonus",
-    body: `Re-hit the 9 during a free-spin run for an instant ${NINE_BALL_BONUS_MULT}× your total bet, paid straight to credits.`,
+    title: "Retrigger",
+    body: `Re-hit the 9 during a free-spin run to add ${RETRIGGER_FREE_SPINS} more free spins to the count.`,
   },
   {
     icon: "🪙",

@@ -1,7 +1,7 @@
 const CONFETTI_COLORS = ["#f87171", "#fbbf24", "#34d399", "#60a5fa", "#c084fc", "#f472b6", "#facc15"];
 
 interface CelebrationProps {
-  type: "win" | "jackpot" | "ninebonus";
+  type: "win" | "jackpot" | "retrigger";
   amount?: number;
   freeSpins?: number;
 }
@@ -44,13 +44,13 @@ export default function Celebration({ type, amount, freeSpins }: CelebrationProp
                 {freeSpins} Free Spins!
               </div>
             </>
-          ) : type === "ninebonus" ? (
+          ) : type === "retrigger" ? (
             <>
               <div className="text-4xl font-black uppercase italic text-amber-300 drop-shadow-[0_3px_10px_rgba(0,0,0,0.7)] sm:text-5xl">
-                9 Ball Bonus!
+                9 Ball!
               </div>
-              <div className="mt-2 text-3xl font-black text-emerald-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)]">
-                +{amount}
+              <div className="mt-2 text-3xl font-black uppercase text-pink-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)]">
+                +{freeSpins} Free Spins!
               </div>
             </>
           ) : (

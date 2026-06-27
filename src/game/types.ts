@@ -68,10 +68,10 @@ export interface SpinResult {
   won: number;
   /** True when the selector landed on the 9 ball on a paid spin — starts the bonus. */
   bonusHit: boolean;
-  /** Free spins awarded by the bonus (0 if none). */
+  /** True when the 9 is re-hit during a free-spin run — adds more free spins. */
+  retrigger: boolean;
+  /** Free spins awarded this spin (initial bonus or retrigger; 0 if none). */
   freeSpinsAwarded: number;
-  /** Flat credit paid when the 9 is re-hit during a free-spin run (0 otherwise). */
-  instantCredit: number;
   /** True if this spin itself was a free (bonus) spin. */
   wasFreeSpin: boolean;
 }
