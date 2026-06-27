@@ -128,6 +128,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "add-credits") {
+      // Free top-up (no payment) — for testing / free-play. Adds a fixed amount.
+      const ADD_AMOUNT = 10;
+      const credits = state.credits + ADD_AMOUNT;
+      await admin
+        .from("profiles")
+        .update({ credits, updated_at: new Date().toISOString() })
+        .eq("id", user.id);
+      return json({
+        credits,
+        freeSpins: state.freeSpins,
+        odds: state.odds,
+        bets: state.lockedBets ?? {},
+      });
+    }
+
     if (action === "refill") {
       if (state.credits > 0 || state.freeSpins > 0) {
         return json({ error: "Refill is only available when you're out of credits" }, 400);

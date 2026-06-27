@@ -41,13 +41,13 @@ export const HIGH_MULTIPLIER_CHANCE = 0.03;
  */
 export const BALLS: Record<BallNumber, BallInfo> = {
   1: { num: 1, weight: 10, color: "#eab308", textColor: "#1f2937", striped: false },
-  2: { num: 2, weight: 10, color: "#1d4ed8", textColor: "#f8fafc", striped: false },
-  3: { num: 3, weight: 10, color: "#dc2626", textColor: "#f8fafc", striped: false },
-  4: { num: 4, weight: 10, color: "#6d28d9", textColor: "#f8fafc", striped: false },
-  5: { num: 5, weight: 10, color: "#ea580c", textColor: "#f8fafc", striped: false },
-  6: { num: 6, weight: 10, color: "#15803d", textColor: "#f8fafc", striped: false },
-  7: { num: 7, weight: 10, color: "#7f1d1d", textColor: "#f8fafc", striped: false },
-  8: { num: 8, weight: 10, color: "#111827", textColor: "#f8fafc", striped: false },
+  2: { num: 2, weight: 10, color: "#1d4ed8", textColor: "#1f2937", striped: false },
+  3: { num: 3, weight: 10, color: "#dc2626", textColor: "#1f2937", striped: false },
+  4: { num: 4, weight: 10, color: "#6d28d9", textColor: "#1f2937", striped: false },
+  5: { num: 5, weight: 10, color: "#ea580c", textColor: "#1f2937", striped: false },
+  6: { num: 6, weight: 10, color: "#15803d", textColor: "#1f2937", striped: false },
+  7: { num: 7, weight: 10, color: "#7f1d1d", textColor: "#1f2937", striped: false },
+  8: { num: 8, weight: 10, color: "#111827", textColor: "#1f2937", striped: false },
   9: { num: 9, weight: 9, color: "#eab308", textColor: "#1f2937", striped: true },
 };
 

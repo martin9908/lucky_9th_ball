@@ -13,12 +13,13 @@ import {
   supabase,
   fetchState,
   requestSpin,
-  requestRefill,
+  requestAddCredits,
   type SpinResponse,
 } from "./lib/supabase";
 import { chipBeep, cueBallHit, loseSound, setMuted, spinStartBeep, winSound } from "./game/sound";
 
-const TOKEN_VALUES = [1, 5, 10, 25];
+// Token denominations — the smallest is the minimum bet.
+const TOKEN_VALUES = [10, 25, 50, 100];
 /** Pause between auto-fired free spins, so each result is readable (ms). */
 const AUTO_SPIN_DELAY = 1200;
 
@@ -240,17 +241,13 @@ export default function App() {
     setPending(null);
   }, [pending]);
 
-  const refill = useCallback(async () => {
+  const addCredits = useCallback(async () => {
     try {
-      const s = await requestRefill();
+      const s = await requestAddCredits();
       setCredits(s.credits);
-      setFreeSpins(s.freeSpins);
-      setOdds(toOdds(s.odds));
-      setBets(toBets(s.bets));
-      setLastWin(0);
-      setMessage("Bankroll refilled. Drop tokens and press START!");
+      setMessage(`+10 credits added.`);
     } catch {
-      setMessage("Couldn't refill — try again.");
+      setMessage("Couldn't add credits — try again.");
     }
   }, []);
 
@@ -292,22 +289,22 @@ export default function App() {
 
       {/* Cabinet */}
       <div className="cabinet-stripes relative overflow-hidden rounded-3xl border-4 border-amber-700/60 p-4 shadow-2xl sm:p-6">
-        {/* Marquee */}
-        <header className="mb-4 flex items-center justify-between gap-2">
-          <div className="w-28 shrink-0" aria-hidden />
-          <div className="flex min-w-0 items-center justify-center gap-2 sm:gap-3">
-            <PoolBall num={9} size={40} />
-            <h1 className="truncate text-3xl font-black uppercase italic tracking-tight text-slate-900 drop-shadow-[0_2px_0_rgba(255,255,255,0.5)] sm:text-5xl">
+        {/* Marquee — on phones: title left, buttons right (no overlap). On
+            larger screens: title centered with the buttons floated right. */}
+        <header className="relative mb-4 flex min-h-11 items-center justify-between gap-2 sm:justify-center sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <PoolBall num={9} size={36} />
+            <h1 className="text-2xl font-black uppercase italic tracking-tight text-slate-900 drop-shadow-[0_2px_0_rgba(255,255,255,0.5)] sm:text-5xl">
               The <span className="text-red-600">9</span> Ball
             </h1>
           </div>
-          <div className="flex w-28 shrink-0 justify-end gap-1.5">
+          <div className="flex shrink-0 gap-1 sm:absolute sm:right-0 sm:top-1/2 sm:-translate-y-1/2">
             <button
               type="button"
               onClick={() => setShowHelp(true)}
               aria-label="How to play"
               title="How to play"
-              className="rounded-full border border-black/20 bg-black/10 px-3 py-1 text-lg font-black transition hover:bg-black/20"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-black/10 text-base font-black transition hover:bg-black/20"
             >
               ?
             </button>
@@ -316,7 +313,7 @@ export default function App() {
               onClick={toggleMute}
               aria-label={muted ? "Unmute sound" : "Mute sound"}
               title={muted ? "Unmute sound" : "Mute sound"}
-              className="rounded-full border border-black/20 bg-black/10 px-2 py-1 text-lg transition hover:bg-black/20"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-black/10 text-base transition hover:bg-black/20"
             >
               {muted ? "🔇" : "🔊"}
             </button>
@@ -325,7 +322,7 @@ export default function App() {
               onClick={signOut}
               title="Sign out"
               aria-label="Sign out"
-              className="rounded-full border border-black/20 bg-black/10 px-2 py-1 text-lg transition hover:bg-black/20"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-black/10 text-base transition hover:bg-black/20"
             >
               ⏻
             </button>
@@ -404,14 +401,16 @@ export default function App() {
           </button>
         </div>
 
-        {credits === 0 && staked === 0 && freeSpins === 0 && (
+        {/* Free top-up (no payment needed). */}
+        {!isFreeSpin && (
           <div className="mt-4 text-center">
             <button
               type="button"
-              onClick={() => void refill()}
-              className="rounded-full border-2 border-slate-900 px-6 py-2 text-sm font-black uppercase text-slate-900 transition hover:bg-slate-900 hover:text-amber-300"
+              onClick={() => void addCredits()}
+              disabled={spinning || credits >= 100}
+              className="rounded-full border-2 border-slate-900/40 bg-amber-200/70 px-5 py-2 text-sm font-black uppercase text-slate-800 transition hover:bg-amber-100 disabled:opacity-40"
             >
-              Out of credits — refill bankroll
+              💰 Add 10 Credits
             </button>
           </div>
         )}

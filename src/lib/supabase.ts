@@ -45,3 +45,4 @@ export const fetchState = () => callGame<StateResponse>({ action: "state" });
 export const requestSpin = (bets: Record<string, number>) =>
   callGame<SpinResponse>({ action: "spin", bets });
 export const requestRefill = () => callGame<StateResponse>({ action: "refill" });
+export const requestAddCredits = () => callGame<StateResponse>({ action: "add-credits" });

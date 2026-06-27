@@ -58,6 +58,33 @@ Sign up, and you should land on the table with 100 credits. Place bets, spin, an
 the balance updates from the server. Refresh or open another device with the same
 account — your credits follow you.
 
+## Mobile app (Capacitor)
+
+The same web build ships as native iOS & Android apps via a WebView — no separate
+codebase. `capacitor.config.ts` points Capacitor at Vite's `dist/`.
+
+```bash
+# Rebuild the web bundle and copy it into the native projects
+npm run cap:sync
+
+# Open the native project to run on a simulator/device
+npm run cap:ios       # opens Xcode (needs Xcode + CocoaPods)
+npm run cap:android   # opens Android Studio (needs Android Studio + a JDK Gradle supports)
+```
+
+Run `cap:sync` (or `cap:ios`/`cap:android`) any time you change the web app — it
+re-bundles and copies the assets into `ios/` and `android/`.
+
+Notes:
+- **App id** is `com.the9ball.app` (in `capacitor.config.ts`). Change it *before*
+  the first `cap add` if you want a different bundle id; after that it's baked into
+  the native projects.
+- The app talks to the **same Supabase backend** over HTTPS — nothing server-side
+  changes. The anon key in the bundle is public by design.
+- The Android `cap add` showed a Gradle/JDK warning on this machine ("Unsupported
+  class file major version") — that's just a too-new local JDK; open the project in
+  Android Studio, let it pick a compatible JDK, and sync Gradle there.
+
 ## How it works
 
 - `supabase/functions/game/` — the authoritative engine + handler (`state`,
