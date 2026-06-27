@@ -191,6 +191,8 @@ export default function App() {
     if (!free && (staked <= 0 || staked > credits)) return;
 
     setSpinning(true);
+    // Bring the playfield into view so the chase isn't off-screen on mobile.
+    window.scrollTo({ top: 0, behavior: "smooth" });
     spinStartBeep();
     setMessage(free ? `🎁 Free spin! (${freeSpins} left)` : "Selecting…");
     if (!free) setCredits((c) => c - staked); // optimistic; reconciled on settle
