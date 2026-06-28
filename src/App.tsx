@@ -21,7 +21,7 @@ import { chipBeep, cueBallHit, loseSound, setMuted, spinStartBeep, winSound } fr
 // Token denominations — the smallest is the minimum bet.
 const TOKEN_VALUES = [10, 25, 50, 100];
 /** Pause between auto-fired free spins, so each result is readable (ms). */
-const AUTO_SPIN_DELAY = 1200;
+const AUTO_SPIN_DELAY = 600;
 /** How long the winning board is held while the payout counts into Credits (ms). */
 const CASH_OUT_DURATION = 1700;
 /** Duration of the Credit Out → Credits transfer roll (ms). */
@@ -303,12 +303,20 @@ export default function App() {
     void supabase.auth.signOut();
   }, []);
 
-  // Auto-fire free spins while any remain.
+  // Keep the latest handleSpin in a ref so the auto-fire timer below doesn't list
+  // it as a dependency — handleSpin's identity churns (it closes over bets,
+  // credits, staked…), and depending on it would cancel and reschedule the
+  // pending free spin on every unrelated re-render, so it could never fire.
+  const handleSpinRef = useRef(handleSpin);
+  handleSpinRef.current = handleSpin;
+
+  // Auto-fire free spins while any remain. Depends only on freeSpins/spinning so
+  // the scheduled spin survives until it actually fires.
   useEffect(() => {
     if (freeSpins <= 0 || spinning) return;
-    const t = setTimeout(() => void handleSpin(), AUTO_SPIN_DELAY);
+    const t = setTimeout(() => void handleSpinRef.current(), AUTO_SPIN_DELAY);
     return () => clearTimeout(t);
-  }, [freeSpins, spinning, handleSpin]);
+  }, [freeSpins, spinning]);
 
   // Credits readout counts toward the authoritative balance — except during a
   // cash-out transfer or a free-spin run, where it's frozen while winnings
@@ -417,7 +425,7 @@ export default function App() {
           </div>
         </header>
 
-        <Playfield landed={landed} odds={odds} spinId={spinId} onSettled={handleSettled} />
+        <Playfield landed={landed} odds={odds} spinId={spinId} fast={isFreeSpin} onSettled={handleSettled} />
 
         {/* Control deck — LED readouts */}
         <div className="mt-4 grid grid-cols-2 items-center justify-items-center gap-3 rounded-2xl border-4 border-black/40 bg-gradient-to-b from-zinc-700 to-zinc-900 px-3 py-3 shadow-inner sm:flex sm:justify-around sm:gap-0">

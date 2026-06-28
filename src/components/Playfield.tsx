@@ -11,6 +11,8 @@ interface PlayfieldProps {
   odds: Odds;
   /** Increments on every new round to (re)trigger the chase. */
   spinId: number;
+  /** Shorter, snappier chase (used for auto free spins so a run isn't endless). */
+  fast?: boolean;
   /** Called when the chase finishes settling on the landed ball. */
   onSettled: () => void;
 }
@@ -23,7 +25,7 @@ const LOOPS = 3;
  * The lit "chase" runs across the grid of balls, fast at first then easing to a
  * stop on the winning ball — the cabinet's light-chase selector.
  */
-export default function Playfield({ landed, odds, spinId, onSettled }: PlayfieldProps) {
+export default function Playfield({ landed, odds, spinId, fast = false, onSettled }: PlayfieldProps) {
   const [active, setActive] = useState<number | null>(null);
   const [settled, setSettled] = useState(true);
   const lastSpinId = useRef(0);
@@ -33,8 +35,11 @@ export default function Playfield({ landed, odds, spinId, onSettled }: Playfield
     if (spinId === lastSpinId.current || landed === null) return;
     lastSpinId.current = spinId;
 
+    // A snappy chase for auto free spins (1 loop, faster) so long runs aren't tedious.
+    const loops = fast ? 1 : LOOPS;
+    const maxInterval = fast ? 90 : MAX_INTERVAL;
     const target = BALL_NUMBERS.indexOf(landed);
-    const steps = LOOPS * BALL_NUMBERS.length + target;
+    const steps = loops * BALL_NUMBERS.length + target;
     setSettled(false);
     let i = 0;
 
@@ -48,7 +53,7 @@ export default function Playfield({ landed, odds, spinId, onSettled }: Playfield
         return;
       }
       const progress = i / steps;
-      const interval = MIN_INTERVAL + (MAX_INTERVAL - MIN_INTERVAL) * Math.pow(progress, 2.4);
+      const interval = MIN_INTERVAL + (maxInterval - MIN_INTERVAL) * Math.pow(progress, 2.4);
       i++;
       timer.current = setTimeout(step, interval);
     };
