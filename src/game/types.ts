@@ -6,11 +6,9 @@ export const BALL_NUMBERS: BallNumber[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 /** Balls you can actually place tokens on. The 9 is the bonus ball, not a bet. */
 export const BET_NUMBERS: BallNumber[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
-/** Visual + odds metadata for a single ball, mirroring the real cabinet. */
+/** Visual metadata for a single ball, mirroring the real cabinet. */
 export interface BallInfo {
   num: BallNumber;
-  /** Relative likelihood the selector lands here. */
-  weight: number;
   /** Billiard-ball colour. */
   color: string;
   /** Number printed in the white centre disc. */
@@ -20,35 +18,38 @@ export interface BallInfo {
 }
 
 /**
- * Shared multiplier range — every ball 1–8 re-rolls within this each spin (the
- * 9 always pays 0). With balls 1–8 equally likely (~11% each) the average
- * payout works out to a modest house edge; widen this to be more generous.
+ * The eight multipliers in play every spin — only their assignment to balls is
+ * randomized (see engine.generateOdds). Each ball's landing odds are ∝
+ * 1/multiplier, so every ball has the same expected value: betting the "hot"
+ * ball is no edge. The lone ×25 keeps the jackpot thrill while landing rarely.
+ * Mirrors PALETTE in supabase/functions/game/engine.ts (the source of truth).
  */
+export const PALETTE = [2, 3, 4, 5, 7, 10, 14, 25] as const;
+
+/** Probability the selector lands on the 9 (bonus), each spin. */
+export const BONUS_HIT_CHANCE = 0.1;
+
+/** Multipliers at or below this are "normal" (red LED); above it is a jackpot
+ * (gold LED). With the palette above, only the ×25 ball lights gold. */
 export const MULTIPLIER_RANGE = { min: 2, max: 14 } as const;
 
-/** Rare "jackpot" multiplier — occasionally a ball rolls from this richer band. */
-export const HIGH_MULTIPLIER_RANGE = { min: 20, max: 50 } as const;
-
-/** Per-ball chance, each spin, of rolling a high multiplier instead of the normal one. */
-export const HIGH_MULTIPLIER_CHANCE = 0.03;
+/** The single jackpot multiplier in the palette (the gold ball). */
+export const JACKPOT_MULTIPLIER = Math.max(...PALETTE);
 
 /**
- * Standard pool-ball colours. Each spin every ball's multiplier is re-rolled
- * randomly within MULTIPLIER_RANGE (no ball is inherently low or high), and
- * balls 1–8 are all equally likely to land — pure chance, no exploit. The 9
- * pays nothing directly: landing on it awards free spins, or an instant credit
- * if hit during a free-spin run.
+ * Standard pool-ball colours. The 9 pays nothing directly: landing on it awards
+ * free spins, or continues a free-spin run.
  */
 export const BALLS: Record<BallNumber, BallInfo> = {
-  1: { num: 1, weight: 10, color: "#eab308", textColor: "#1f2937", striped: false },
-  2: { num: 2, weight: 10, color: "#1d4ed8", textColor: "#1f2937", striped: false },
-  3: { num: 3, weight: 10, color: "#dc2626", textColor: "#1f2937", striped: false },
-  4: { num: 4, weight: 10, color: "#6d28d9", textColor: "#1f2937", striped: false },
-  5: { num: 5, weight: 10, color: "#ea580c", textColor: "#1f2937", striped: false },
-  6: { num: 6, weight: 10, color: "#15803d", textColor: "#1f2937", striped: false },
-  7: { num: 7, weight: 10, color: "#7f1d1d", textColor: "#1f2937", striped: false },
-  8: { num: 8, weight: 10, color: "#111827", textColor: "#1f2937", striped: false },
-  9: { num: 9, weight: 20, color: "#eab308", textColor: "#1f2937", striped: true },
+  1: { num: 1, color: "#eab308", textColor: "#1f2937", striped: false },
+  2: { num: 2, color: "#1d4ed8", textColor: "#1f2937", striped: false },
+  3: { num: 3, color: "#dc2626", textColor: "#1f2937", striped: false },
+  4: { num: 4, color: "#6d28d9", textColor: "#1f2937", striped: false },
+  5: { num: 5, color: "#ea580c", textColor: "#1f2937", striped: false },
+  6: { num: 6, color: "#15803d", textColor: "#1f2937", striped: false },
+  7: { num: 7, color: "#7f1d1d", textColor: "#1f2937", striped: false },
+  8: { num: 8, color: "#111827", textColor: "#1f2937", striped: false },
+  9: { num: 9, color: "#eab308", textColor: "#1f2937", striped: true },
 };
 
 /** Tokens placed on each number. Missing key = no bet. */

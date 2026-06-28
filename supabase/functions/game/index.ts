@@ -39,6 +39,8 @@ interface ProfileRow {
   current_odds: Odds | null;
   locked_bets: Record<string, number> | null;
   run_winnings: number | null;
+  lifetime_wagered: number | null;
+  lifetime_won: number | null;
 }
 
 Deno.serve(async (req) => {
@@ -57,7 +59,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: readError } = await admin
       .from("profiles")
-      .select("credits, free_spins, current_odds, locked_bets, run_winnings")
+      .select("credits, free_spins, current_odds, locked_bets, run_winnings, lifetime_wagered, lifetime_won")
       .eq("id", user.id)
       .single<ProfileRow>();
     if (readError || !row) return json({ error: "Profile not found" }, 404);
@@ -75,6 +77,8 @@ Deno.serve(async (req) => {
       odds,
       lockedBets: row.locked_bets ?? null,
       runWinnings: row.run_winnings ?? 0,
+      lifetimeWagered: row.lifetime_wagered ?? 0,
+      lifetimeWon: row.lifetime_won ?? 0,
     };
 
     const body = await req.json().catch(() => ({}));
@@ -110,6 +114,8 @@ Deno.serve(async (req) => {
           current_odds: outcome.next.odds,
           locked_bets: outcome.next.lockedBets,
           run_winnings: outcome.next.runWinnings,
+          lifetime_wagered: outcome.next.lifetimeWagered,
+          lifetime_won: outcome.next.lifetimeWon,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);

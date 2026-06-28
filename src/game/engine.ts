@@ -1,69 +1,80 @@
 import {
   BALL_NUMBERS,
   BET_NUMBERS,
-  BALLS,
-  MULTIPLIER_RANGE,
-  HIGH_MULTIPLIER_RANGE,
-  HIGH_MULTIPLIER_CHANCE,
+  PALETTE,
+  BONUS_HIT_CHANCE,
   type BallNumber,
   type Bets,
   type Odds,
   type SpinResult,
 } from "./types";
 
-const TOTAL_WEIGHT = BALL_NUMBERS.reduce((sum, n) => sum + BALLS[n].weight, 0);
+// Client mirror of the server's house-edge model (the authoritative copy lives
+// in supabase/functions/game/engine.ts). This drives the UI/animation and the
+// Monte-Carlo sim; real outcomes always come from the server. The per-user
+// throttle is server-only — the browser just renders whatever odds it's sent.
 
 /** Free spins awarded by the first 9-ball hit (on a paid spin). */
-export const FREE_SPIN_RANGE = { min: 10, max: 15 } as const;
+export const FREE_SPIN_RANGE = { min: 3, max: 5 } as const;
 
 /** Free spins added when the 9 is re-hit during a free-spin run (retrigger). */
-export const RETRIGGER_FREE_SPINS = 3;
+export const RETRIGGER_FREE_SPINS = 1;
 
 function randomInt(minInclusive: number, maxInclusive: number): number {
   return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
 }
 
-/** Pick `count` distinct integers from [min, max] (partial Fisher–Yates). */
-function sampleDistinct(min: number, max: number, count: number): number[] {
-  const pool: number[] = [];
-  for (let v = min; v <= max; v++) pool.push(v);
-  for (let i = 0; i < count && i < pool.length; i++) {
-    const j = i + Math.floor(Math.random() * (pool.length - i));
-    const tmp = pool[i];
-    pool[i] = pool[j];
-    pool[j] = tmp;
+/** Fisher–Yates shuffle (returns a new array). */
+function shuffle<T>(items: readonly T[]): T[] {
+  const out = items.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
   }
-  return pool.slice(0, count);
+  return out;
 }
 
 /**
- * Roll a fresh multiplier for each bet ball (the 9 stays 0). Each ball may roll
- * from the richer high band, and all eight multipliers are distinct — sampled
- * without replacement within each band (the bands don't overlap).
+ * Assign the fixed palette to the eight bet balls at random (the 9 is always 0).
+ * Because the set of multipliers is fixed, the base RTP never drifts.
  */
 export function generateOdds(): Odds {
+  const shuffled = shuffle(PALETTE);
   const odds = {} as Odds;
-  const high = BET_NUMBERS.map(() => Math.random() < HIGH_MULTIPLIER_CHANCE);
-  const highCount = high.filter(Boolean).length;
-  const normalVals = sampleDistinct(MULTIPLIER_RANGE.min, MULTIPLIER_RANGE.max, high.length - highCount);
-  const highVals = sampleDistinct(HIGH_MULTIPLIER_RANGE.min, HIGH_MULTIPLIER_RANGE.max, highCount);
-  let ni = 0;
-  let hi = 0;
   BET_NUMBERS.forEach((n, i) => {
-    odds[n] = high[i] ? highVals[hi++] : normalVals[ni++];
+    odds[n] = shuffled[i];
   });
   odds[9] = 0;
   return odds;
 }
 
-/** Pick the landed ball, weighted so higher-tier balls land less often. */
-function pickLandedNumber(): BallNumber {
-  let roll = Math.random() * TOTAL_WEIGHT;
+/**
+ * Landing probability for every ball. Bet balls get weight ∝ 1/multiplier so
+ * every ball has the SAME expected payout (= base RTP); the 9 gets the weight
+ * that fixes its probability at BONUS_HIT_CHANCE.
+ */
+export function landingProbabilities(odds: Odds): Record<BallNumber, number> {
+  const inv = BET_NUMBERS.map((n) => 1 / odds[n]);
+  const sumInv = inv.reduce((a, b) => a + b, 0);
+  const w9 = (sumInv * BONUS_HIT_CHANCE) / (1 - BONUS_HIT_CHANCE);
+  const total = sumInv + w9;
+  const probs = {} as Record<BallNumber, number>;
+  BET_NUMBERS.forEach((n, i) => {
+    probs[n] = inv[i] / total;
+  });
+  probs[9] = w9 / total;
+  return probs;
+}
+
+/** Pick the landed ball using {@link landingProbabilities}. */
+export function pickLandedNumber(odds: Odds): BallNumber {
+  const probs = landingProbabilities(odds);
+  let roll = Math.random();
   for (const n of BALL_NUMBERS) {
-    roll -= BALLS[n].weight;
+    roll -= probs[n];
     if (roll <= 0) return n;
   }
-  return BALL_NUMBERS[0];
+  return 9;
 }
 
 export function totalBet(bets: Bets): number {
@@ -80,13 +91,12 @@ export interface SpinOptions {
  * current bets and returns the outcome. Balance bookkeeping (charging the bet,
  * crediting the win) is the caller's job.
  *
- * On a paid spin, landing the 9 pays nothing but awards 10–15 free spins. During
- * a free-spin run, re-hitting the 9 retriggers +3 more free spins and the run
- * continues.
+ * On a paid spin, landing the 9 pays nothing but awards free spins. During a
+ * free-spin run, re-hitting the 9 retriggers more and the run continues.
  */
 export function spin(bets: Bets, odds: Odds, options: SpinOptions = {}): SpinResult {
   const isFreeSpin = options.isFreeSpin ?? false;
-  const landed = pickLandedNumber();
+  const landed = pickLandedNumber(odds);
   const isNine = landed === 9;
   const stake = totalBet(bets);
 

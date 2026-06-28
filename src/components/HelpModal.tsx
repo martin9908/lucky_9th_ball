@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { FREE_SPIN_RANGE, RETRIGGER_FREE_SPINS } from "../game/engine";
-import { MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE } from "../game/types";
+import { MULTIPLIER_RANGE, JACKPOT_MULTIPLIER } from "../game/types";
 import PoolBall from "./PoolBall";
 
 interface HelpModalProps {
@@ -22,12 +22,12 @@ const RULES: Rule[] = [
   {
     icon: "🎰",
     title: "Spin",
-    body: "The selector lands on one ball — all eight are equally likely. If you bet on it, you win your stake × that ball's multiplier.",
+    body: "The selector lands on one ball. If you bet on it, you win your stake × that ball's multiplier — so every ball is worth the same on average.",
   },
   {
     icon: "🔢",
     title: "Multipliers",
-    body: `Every ball shows a random ×${MULTIPLIER_RANGE.min}–×${MULTIPLIER_RANGE.max} that re-rolls each spin. Now and then a ball lights up gold with a jackpot ×${HIGH_MULTIPLIER_RANGE.min}–×${HIGH_MULTIPLIER_RANGE.max}.`,
+    body: `Each spin the eight multipliers (×${MULTIPLIER_RANGE.min} up to a jackpot ×${JACKPOT_MULTIPLIER}) are dealt to the balls at random. The bigger a ball's multiplier, the less often it lands — chasing the gold ×${JACKPOT_MULTIPLIER} is a long shot.`,
   },
   {
     icon: "🟡",
