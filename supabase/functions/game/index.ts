@@ -38,6 +38,7 @@ interface ProfileRow {
   free_spins: number;
   current_odds: Odds | null;
   locked_bets: Record<string, number> | null;
+  run_winnings: number | null;
 }
 
 Deno.serve(async (req) => {
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: readError } = await admin
       .from("profiles")
-      .select("credits, free_spins, current_odds, locked_bets")
+      .select("credits, free_spins, current_odds, locked_bets, run_winnings")
       .eq("id", user.id)
       .single<ProfileRow>();
     if (readError || !row) return json({ error: "Profile not found" }, 404);
@@ -73,6 +74,7 @@ Deno.serve(async (req) => {
       freeSpins: row.free_spins,
       odds,
       lockedBets: row.locked_bets ?? null,
+      runWinnings: row.run_winnings ?? 0,
     };
 
     const body = await req.json().catch(() => ({}));
@@ -84,6 +86,7 @@ Deno.serve(async (req) => {
         freeSpins: state.freeSpins,
         odds: state.odds,
         bets: state.lockedBets ?? {},
+        runWinnings: state.runWinnings,
       });
     }
 
@@ -106,6 +109,7 @@ Deno.serve(async (req) => {
           free_spins: outcome.next.freeSpins,
           current_odds: outcome.next.odds,
           locked_bets: outcome.next.lockedBets,
+          run_winnings: outcome.next.runWinnings,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
@@ -120,6 +124,7 @@ Deno.serve(async (req) => {
         freeSpinsAwarded: outcome.freeSpinsAwarded,
         wasFreeSpin: outcome.wasFreeSpin,
         totalBet: outcome.totalBet,
+        runWinnings: outcome.runWinnings,
         // New authoritative state for the client to display after the chase.
         credits: outcome.next.credits,
         freeSpins: outcome.next.freeSpins,
@@ -141,6 +146,7 @@ Deno.serve(async (req) => {
         freeSpins: state.freeSpins,
         odds: state.odds,
         bets: state.lockedBets ?? {},
+        runWinnings: state.runWinnings,
       });
     }
 
@@ -156,10 +162,11 @@ Deno.serve(async (req) => {
           free_spins: 0,
           current_odds: freshOdds,
           locked_bets: null,
+          run_winnings: 0,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
-      return json({ credits: 100, freeSpins: 0, odds: freshOdds, bets: {} });
+      return json({ credits: 100, freeSpins: 0, odds: freshOdds, bets: {}, runWinnings: 0 });
     }
 
     return json({ error: "Unknown action" }, 400);

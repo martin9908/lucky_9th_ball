@@ -126,6 +126,12 @@ export default function App() {
     setFreeSpins(s.freeSpins);
     setOdds(toOdds(s.odds));
     setBets(toBets(s.bets));
+    // Sync the readouts directly (the credits-tracking effect is gated during a
+    // run). Mid-run, Credits shows the frozen pre-run base and Credit Out shows
+    // the server-tracked tally, so a refresh restores both. Outside a run
+    // runWinnings is 0, so this is just credits / 0.
+    setCreditsDisplay(s.credits - s.runWinnings);
+    setCreditOutDisplay(s.runWinnings);
     setStateLoaded(true);
   }, []);
 
@@ -198,7 +204,9 @@ export default function App() {
     if (!free && (staked <= 0 || staked > credits)) return;
 
     setSpinning(true);
-    setCreditOutDisplay(0); // clear the previous payout when a new roll begins
+    // Clear the previous payout on a new paid round, but keep the running tally
+    // through a free-spin run so Credit Out accumulates.
+    if (!free) setCreditOutDisplay(0);
     // Bring the playfield into view so the chase isn't off-screen on mobile.
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     window.scrollTo({ top: 0, behavior: "smooth" }); // fallback if the window is the scroller
@@ -232,6 +240,7 @@ export default function App() {
     setFreeSpins(res.freeSpins);
 
     if (res.bonusHit) {
+      setCreditOutDisplay(0); // run starts fresh (server runWinnings is 0)
       cueBallHit();
       setCelebration({ type: "jackpot", freeSpins: res.freeSpinsAwarded });
       setMessage(`🟡 THE 9 BALL! ${res.freeSpinsAwarded} free spins awarded!`);
@@ -248,16 +257,32 @@ export default function App() {
       setMessage(`Ball ${res.landed} ×${res.odds} — no token there.`);
     }
 
-    // On a round-ending win, hold the winning board while the payout transfers
-    // from Credit Out into Credits, then refresh (clear bets / re-roll odds).
-    // Otherwise (a loss, or a mid free-spin win) just show the payout and the
-    // Credits readout counts up on its own.
+    // The free-spin run total (res.runWinnings) is tracked server-side, so it
+    // survives a refresh. During the run Credits is frozen and winnings tally on
+    // Credit Out; when the run ends the whole tally transfers into Credits.
     const nextOdds = toOdds(res.nextOdds);
     const nextBets = toBets(res.nextBets);
-    if (won > 0 && res.freeSpins === 0) {
+    const runEnded = res.wasFreeSpin && res.freeSpins === 0;
+
+    if (runEnded && res.runWinnings > 0) {
+      // End of a free-spin run: cash out the whole accumulated tally.
+      setCashOut({
+        odds: nextOdds,
+        bets: nextBets,
+        win: res.runWinnings,
+        base: res.credits - res.runWinnings,
+      });
+    } else if (!res.wasFreeSpin && won > 0 && res.freeSpins === 0) {
+      // A normal paid win: transfer it from Credit Out into Credits.
       setCashOut({ odds: nextOdds, bets: nextBets, win: won, base: res.credits - won });
+    } else if (res.freeSpins > 0) {
+      // Mid free-spin run: keep the server-tracked tally on Credit Out; board locked.
+      setCreditOutDisplay(res.runWinnings);
+      setOdds(nextOdds);
+      setBets(nextBets);
     } else {
-      setCreditOutDisplay(won);
+      // A loss (or a winless run end): nothing to cash out, refresh now.
+      setCreditOutDisplay(0);
       setOdds(nextOdds);
       setBets(nextBets);
     }
@@ -285,12 +310,13 @@ export default function App() {
     return () => clearTimeout(t);
   }, [freeSpins, spinning, handleSpin]);
 
-  // Credits readout counts toward the authoritative balance — except while a
-  // cash-out transfer is running, which drives both readouts directly.
+  // Credits readout counts toward the authoritative balance — except during a
+  // cash-out transfer or a free-spin run, where it's frozen while winnings
+  // accumulate in Credit Out (then transfer in at the end of the run).
   useEffect(() => {
-    if (cashingOut) return;
+    if (cashingOut || freeSpins > 0) return;
     return tween(creditsDispRef.current, credits, READOUT_DURATION, setCreditsDisplay);
-  }, [credits, cashingOut]);
+  }, [credits, cashingOut, freeSpins]);
 
   // Cash-out: the payout drains from Credit Out into Credits in lockstep, the
   // winning board is held, then it refreshes (clear bets / re-roll odds).

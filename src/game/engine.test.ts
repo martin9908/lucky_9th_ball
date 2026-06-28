@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { spin, totalBet, generateOdds, FREE_SPIN_RANGE, RETRIGGER_FREE_SPINS } from "./engine";
-import { BALL_NUMBERS, BALLS, MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE, type BallNumber, type Odds } from "./types";
+import { BALL_NUMBERS, BET_NUMBERS, BALLS, MULTIPLIER_RANGE, HIGH_MULTIPLIER_RANGE, type BallNumber, type Odds } from "./types";
 
 /** Build a full odds map (all balls = 2, the 9 = 0) with optional overrides. */
 function makeOdds(overrides: Partial<Odds> = {}): Odds {
@@ -37,22 +37,12 @@ describe("totalBet", () => {
 });
 
 describe("generateOdds", () => {
-  it("rolls a normal multiplier when the high-roll misses (random high → top of normal range)", () => {
-    // 0.99 misses the small high-multiplier chance, then maps to the top of the normal range.
-    vi.spyOn(Math, "random").mockReturnValue(0.99);
-    const odds = generateOdds();
-    for (const n of BALL_NUMBERS) {
-      if (n === 9) expect(odds[n]).toBe(0);
-      else expect(odds[n]).toBe(MULTIPLIER_RANGE.max);
-    }
-  });
-
-  it("rolls a high multiplier when the high-roll hits (random 0 → bottom of high range)", () => {
-    vi.spyOn(Math, "random").mockReturnValue(0);
-    const odds = generateOdds();
-    for (const n of BALL_NUMBERS) {
-      if (n === 9) expect(odds[n]).toBe(0);
-      else expect(odds[n]).toBe(HIGH_MULTIPLIER_RANGE.min);
+  it("gives every bet ball a distinct multiplier (the 9 is always 0)", () => {
+    for (let i = 0; i < 300; i++) {
+      const odds = generateOdds();
+      const values = BET_NUMBERS.map((n) => odds[n]);
+      expect(new Set(values).size).toBe(BET_NUMBERS.length);
+      expect(odds[9]).toBe(0);
     }
   });
 

@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
+    "deploy:game": "vitest run && npx supabase functions deploy game",
     "cap:sync": "npm run build && cap sync",
     "cap:ios": "npm run build && cap sync && cap open ios",
     "cap:android": "npm run build && cap sync && cap open android"

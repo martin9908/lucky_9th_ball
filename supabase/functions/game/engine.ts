@@ -9,8 +9,9 @@ export const BET_NUMBERS: BallNumber[] = [1, 2, 3, 4, 5, 6, 7, 8];
 export type Bets = Partial<Record<BallNumber, number>>;
 export type Odds = Record<BallNumber, number>;
 
-// Landing weights: balls 1–8 equally likely, the 9 (bonus) tuned separately.
-const WEIGHTS: Record<BallNumber, number> = { 1: 10, 2: 10, 3: 10, 4: 10, 5: 10, 6: 10, 7: 10, 8: 10, 9: 9 };
+// Landing weights: balls 1–8 equally likely, the 9 (jackpot/bonus) tuned for its
+// hit rate. At weight 20 with 1–8 = 10 each (total 100) the 9 lands ~20%.
+const WEIGHTS: Record<BallNumber, number> = { 1: 10, 2: 10, 3: 10, 4: 10, 5: 10, 6: 10, 7: 10, 8: 10, 9: 20 };
 const TOTAL_WEIGHT = BALL_NUMBERS.reduce((sum, n) => sum + WEIGHTS[n], 0);
 
 export const MULTIPLIER_RANGE = { min: 2, max: 14 };
@@ -25,16 +26,36 @@ function randomInt(minInclusive: number, maxInclusive: number): number {
   return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
 }
 
+/** Pick `count` distinct integers from [min, max] (partial Fisher–Yates). */
+function sampleDistinct(min: number, max: number, count: number): number[] {
+  const pool: number[] = [];
+  for (let v = min; v <= max; v++) pool.push(v);
+  for (let i = 0; i < count && i < pool.length; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    const tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
+  }
+  return pool.slice(0, count);
+}
+
+/**
+ * Roll a fresh multiplier for each bet ball (the 9 stays 0). Each ball may roll
+ * from the richer high band, and all eight multipliers are distinct — sampled
+ * without replacement within each band (the bands don't overlap).
+ */
 export function generateOdds(): Odds {
   const odds = {} as Odds;
-  for (const n of BALL_NUMBERS) {
-    if (n === 9) {
-      odds[n] = 0;
-      continue;
-    }
-    const range = Math.random() < HIGH_MULTIPLIER_CHANCE ? HIGH_MULTIPLIER_RANGE : MULTIPLIER_RANGE;
-    odds[n] = randomInt(range.min, range.max);
-  }
+  const high = BET_NUMBERS.map(() => Math.random() < HIGH_MULTIPLIER_CHANCE);
+  const highCount = high.filter(Boolean).length;
+  const normalVals = sampleDistinct(MULTIPLIER_RANGE.min, MULTIPLIER_RANGE.max, high.length - highCount);
+  const highVals = sampleDistinct(HIGH_MULTIPLIER_RANGE.min, HIGH_MULTIPLIER_RANGE.max, highCount);
+  let ni = 0;
+  let hi = 0;
+  BET_NUMBERS.forEach((n, i) => {
+    odds[n] = high[i] ? highVals[hi++] : normalVals[ni++];
+  });
+  odds[9] = 0;
   return odds;
 }
 
@@ -68,6 +89,8 @@ export interface PlayerState {
   freeSpins: number;
   odds: Odds;
   lockedBets: Bets | null;
+  /** Accumulated winnings of the current free-spin run (0 outside a run). */
+  runWinnings: number;
 }
 
 export interface SpinOutcome {
@@ -81,6 +104,8 @@ export interface SpinOutcome {
   freeSpinsAwarded: number;
   wasFreeSpin: boolean;
   totalBet: number;
+  /** Running total of the free-spin run after this spin (the Credit Out tally). */
+  runWinnings: number;
   // Authoritative next state to persist and return to the client.
   next: PlayerState;
 }
@@ -109,6 +134,11 @@ export function resolveSpin(state: PlayerState, requestedBets: Bets): SpinOutcom
   const credits = state.credits - (isFreeSpin ? 0 : stake) + won;
   const freeSpins = Math.max(0, state.freeSpins - (isFreeSpin ? 1 : 0)) + freeSpinsAwarded;
 
+  // Accumulate winnings during a free-spin run (a paid spin resets the tally).
+  // This is the Credit Out figure; reported even on the final spin so the client
+  // can cash out the whole total, then persisted back to 0 once the run is over.
+  const runWinnings = isFreeSpin ? state.runWinnings + won : 0;
+
   // Odds and bets re-roll/clear once the round is fully over, but stay locked
   // through a live free-spin run.
   const runLive = freeSpins > 0;
@@ -117,6 +147,7 @@ export function resolveSpin(state: PlayerState, requestedBets: Bets): SpinOutcom
     freeSpins,
     odds: runLive ? odds : generateOdds(),
     lockedBets: runLive ? bets : null,
+    runWinnings: runLive ? runWinnings : 0,
   };
 
   return {
@@ -128,6 +159,7 @@ export function resolveSpin(state: PlayerState, requestedBets: Bets): SpinOutcom
     freeSpinsAwarded,
     wasFreeSpin: isFreeSpin,
     totalBet: stake,
+    runWinnings,
     next,
   };
 }

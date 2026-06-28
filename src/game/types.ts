@@ -48,7 +48,7 @@ export const BALLS: Record<BallNumber, BallInfo> = {
   6: { num: 6, weight: 10, color: "#15803d", textColor: "#1f2937", striped: false },
   7: { num: 7, weight: 10, color: "#7f1d1d", textColor: "#1f2937", striped: false },
   8: { num: 8, weight: 10, color: "#111827", textColor: "#1f2937", striped: false },
-  9: { num: 9, weight: 9, color: "#eab308", textColor: "#1f2937", striped: true },
+  9: { num: 9, weight: 20, color: "#eab308", textColor: "#1f2937", striped: true },
 };
 
 /** Tokens placed on each number. Missing key = no bet. */

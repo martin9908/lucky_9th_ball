@@ -20,6 +20,7 @@ export interface SpinResponse {
   freeSpinsAwarded: number;
   wasFreeSpin: boolean;
   totalBet: number;
+  runWinnings: number;
   credits: number;
   freeSpins: number;
   nextOdds: Record<string, number>;
@@ -31,6 +32,7 @@ export interface StateResponse {
   freeSpins: number;
   odds: Record<string, number>;
   bets: Record<string, number>;
+  runWinnings: number;
 }
 
 /** Call the server-authoritative `game` Edge Function. */

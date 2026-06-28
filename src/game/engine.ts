@@ -1,5 +1,6 @@
 import {
   BALL_NUMBERS,
+  BET_NUMBERS,
   BALLS,
   MULTIPLIER_RANGE,
   HIGH_MULTIPLIER_RANGE,
@@ -22,20 +23,36 @@ function randomInt(minInclusive: number, maxInclusive: number): number {
   return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
 }
 
+/** Pick `count` distinct integers from [min, max] (partial Fisher–Yates). */
+function sampleDistinct(min: number, max: number, count: number): number[] {
+  const pool: number[] = [];
+  for (let v = min; v <= max; v++) pool.push(v);
+  for (let i = 0; i < count && i < pool.length; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    const tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
+  }
+  return pool.slice(0, count);
+}
+
 /**
- * Roll a fresh multiplier for each ball (the 9 stays 0). Each ball has a small
- * chance to roll from the richer HIGH_MULTIPLIER_RANGE instead of the normal one.
+ * Roll a fresh multiplier for each bet ball (the 9 stays 0). Each ball may roll
+ * from the richer high band, and all eight multipliers are distinct — sampled
+ * without replacement within each band (the bands don't overlap).
  */
 export function generateOdds(): Odds {
   const odds = {} as Odds;
-  for (const n of BALL_NUMBERS) {
-    if (n === 9) {
-      odds[n] = 0;
-      continue;
-    }
-    const range = Math.random() < HIGH_MULTIPLIER_CHANCE ? HIGH_MULTIPLIER_RANGE : MULTIPLIER_RANGE;
-    odds[n] = randomInt(range.min, range.max);
-  }
+  const high = BET_NUMBERS.map(() => Math.random() < HIGH_MULTIPLIER_CHANCE);
+  const highCount = high.filter(Boolean).length;
+  const normalVals = sampleDistinct(MULTIPLIER_RANGE.min, MULTIPLIER_RANGE.max, high.length - highCount);
+  const highVals = sampleDistinct(HIGH_MULTIPLIER_RANGE.min, HIGH_MULTIPLIER_RANGE.max, highCount);
+  let ni = 0;
+  let hi = 0;
+  BET_NUMBERS.forEach((n, i) => {
+    odds[n] = high[i] ? highVals[hi++] : normalVals[ni++];
+  });
+  odds[9] = 0;
   return odds;
 }
 
